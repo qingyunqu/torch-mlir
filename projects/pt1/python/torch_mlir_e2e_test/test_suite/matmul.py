@@ -156,6 +156,96 @@ def Matmul_3d(module, tu: TestUtils):
 # ==============================================================================
 
 
+class Matmul3DVec(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([3, 4, 5], torch.float32, True),
+            ([5], torch.float32, True),
+        ]
+    )
+    def forward(self, lhs, rhs):
+        return torch.matmul(lhs, rhs)
+
+
+@register_test_case(module_factory=lambda: Matmul3DVec())
+def Matmul3DVec_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5), tu.rand(5))
+
+
+class MatmulVec3D(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([4], torch.float32, True),
+            ([3, 4, 5], torch.float32, True),
+        ]
+    )
+    def forward(self, lhs, rhs):
+        return torch.matmul(lhs, rhs)
+
+
+@register_test_case(module_factory=lambda: MatmulVec3D())
+def MatmulVec3D_basic(module, tu: TestUtils):
+    module.forward(tu.rand(4), tu.rand(3, 4, 5))
+
+
+# ==============================================================================
+
+
+class Matmul3DMat(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([3, 4, 5], torch.float32, True),
+            ([5, 4], torch.float32, True),
+        ]
+    )
+    def forward(self, lhs, rhs):
+        return torch.matmul(lhs, rhs)
+
+
+@register_test_case(module_factory=lambda: Matmul3DMat())
+def Matmul3DMat_basic(module, tu: TestUtils):
+    module.forward(tu.rand(3, 4, 5), tu.rand(5, 4))
+
+
+class MatmulMat3D(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    @export
+    @annotate_args(
+        [
+            None,
+            ([5, 4], torch.float32, True),
+            ([3, 4, 5], torch.float32, True),
+        ]
+    )
+    def forward(self, lhs, rhs):
+        return torch.matmul(lhs, rhs)
+
+
+@register_test_case(module_factory=lambda: MatmulMat3D())
+def MatmulMat3D_basic(module, tu: TestUtils):
+    module.forward(tu.rand(5, 4), tu.rand(3, 4, 5))
+
+
+# ==============================================================================
+
+
 class Matmul4d(torch.nn.Module):
     def __init__(self):
         super().__init__()

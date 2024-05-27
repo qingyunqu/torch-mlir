@@ -267,6 +267,8 @@ public:
                               Value &rhs, Value &output) const {
     auto lhsTy = cast<RankedTensorType>(lhs.getType());
     auto rhsTy = cast<RankedTensorType>(rhs.getType());
+    auto outTy =
+        ConvertAtenOp<AtenOpT>::getTypeConverter()->convertType(op.getType());
 
     auto lhsRank = lhsTy.getRank();
     auto rhsRank = rhsTy.getRank();
@@ -280,58 +282,73 @@ public:
     }
 
     if (lhsRank <= 2 && rhsRank <= 2) {
-      auto tensorType =
-          ConvertAtenOp<AtenOpT>::getTypeConverter()->convertType(op.getType());
-      output = rewriter.create<stablehlo::DotOp>(op->getLoc(), tensorType, lhs,
-                                                 rhs, nullptr);
+      output = rewriter.create<stablehlo::DotOp>(op->getLoc(), outTy, lhs, rhs,
+                                                 nullptr);
       return success();
     }
 
-    const auto &options = ConvertAtenOp<AtenOpT>::getOptions();
-    int64_t nBatchDims;
     if (rhsRank <= 2) {
-      auto leadingRank = lhsRank - 2;
-      getBmmBroadcast(rewriter, op, lhs, rhs, leadingRank,
-                      options.dimSizeIndexBits);
-      nBatchDims = leadingRank;
+      stablehlo::DotDimensionNumbersAttr dotDimensionNumbers =
+          stablehlo::DotDimensionNumbersAttr::get(
+              rewriter.getContext(),
+              /*lhsBatchingDimensions=*/{},
+              /*rhsBatchingDimensions=*/{},
+              /*lhsContractingDimensions=*/{lhsRank - 1},
+              /*rhsContractingDimensions=*/{0});
+      output =
+          rewriter
+              .create<stablehlo::DotGeneralOp>(op->getLoc(), outTy, lhs, rhs,
+                                               dotDimensionNumbers, nullptr)
+              .getResult();
+      return success();
     } else if (lhsRank <= 2) {
-      auto leadingRank = rhsRank - 2;
-      getBmmBroadcast(rewriter, op, lhs, rhs, leadingRank,
-                      options.dimSizeIndexBits);
-      nBatchDims = leadingRank;
+      stablehlo::DotDimensionNumbersAttr dotDimensionNumbers =
+          stablehlo::DotDimensionNumbersAttr::get(
+              rewriter.getContext(),
+              /*lhsBatchingDimensions=*/{},
+              /*rhsBatchingDimensions=*/{},
+              /*lhsContractingDimensions=*/{lhsRank - 1},
+              /*rhsContractingDimensions=*/{rhsRank - 2});
+      output =
+          rewriter
+              .create<stablehlo::DotGeneralOp>(op->getLoc(), outTy, lhs, rhs,
+                                               dotDimensionNumbers, nullptr)
+              .getResult();
+      return success();
     } else {
+      const auto &options = ConvertAtenOp<AtenOpT>::getOptions();
       assert(rhsRank > 2 && lhsRank > 2);
       auto leadingRank = std::max(lhsRank - rhsRank, rhsRank - lhsRank);
-      nBatchDims = std::max(lhsRank - 2, rhsRank - 2);
+      int64_t nBatchDims = std::max(lhsRank - 2, rhsRank - 2);
       getBmmBroadcast(rewriter, op, lhs, rhs, leadingRank,
                       options.dimSizeIndexBits);
-    }
-    auto batchDims = llvm::to_vector<4>(llvm::seq<int64_t>(0, nBatchDims));
+      auto batchDims = llvm::to_vector<4>(llvm::seq<int64_t>(0, nBatchDims));
 
-    auto lhsResultDim = nBatchDims;
-    auto rhsResultDim = nBatchDims + 1;
-    auto lhsContractingDim = nBatchDims + 1;
-    auto rhsContractingDim = nBatchDims;
-    if (lhsRank == 1) {
-      lhsResultDim = nBatchDims + 1;
-      lhsContractingDim = nBatchDims;
+      auto lhsResultDim = nBatchDims;
+      auto rhsResultDim = nBatchDims + 1;
+      auto lhsContractingDim = nBatchDims + 1;
+      auto rhsContractingDim = nBatchDims;
+      if (lhsRank == 1) {
+        lhsResultDim = nBatchDims + 1;
+        lhsContractingDim = nBatchDims;
+      }
+      stablehlo::DotDimensionNumbersAttr dotDimensionNumbers =
+          stablehlo::DotDimensionNumbersAttr::get(
+              rewriter.getContext(),
+              /*lhsBatchingDimensions=*/batchDims,
+              /*rhsBatchingDimensions=*/batchDims,
+              /*lhsContractingDimensions=*/{lhsContractingDim},
+              /*rhsContractingDimensions=*/{rhsContractingDim});
+      auto outTy =
+          castContractingDim(rewriter, op, lhs, rhs, lhsResultDim, rhsResultDim,
+                             lhsContractingDim, rhsContractingDim);
+      output =
+          rewriter
+              .create<stablehlo::DotGeneralOp>(op->getLoc(), outTy, lhs, rhs,
+                                               dotDimensionNumbers, nullptr)
+              .getResult();
+      return success();
     }
-
-    stablehlo::DotDimensionNumbersAttr dotDimensionNumbers =
-        stablehlo::DotDimensionNumbersAttr::get(
-            rewriter.getContext(),
-            /*lhsBatchingDimensions=*/batchDims,
-            /*rhsBatchingDimensions=*/batchDims,
-            /*lhsContractingDimensions=*/{lhsContractingDim},
-            /*rhsContractingDimensions=*/{rhsContractingDim});
-    auto outTy =
-        castContractingDim(rewriter, op, lhs, rhs, lhsResultDim, rhsResultDim,
-                           lhsContractingDim, rhsContractingDim);
-    output = rewriter
-                 .create<stablehlo::DotGeneralOp>(op->getLoc(), outTy, lhs, rhs,
-                                                  dotDimensionNumbers, nullptr)
-                 .getResult();
-    return success();
   }
 
   // The default version just reads two inputs, computes output and returns it.

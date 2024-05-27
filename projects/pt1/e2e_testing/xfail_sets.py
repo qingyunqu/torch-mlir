@@ -27,6 +27,8 @@ LINALG_XFAIL_SET = COMMON_TORCH_MLIR_LOWERING_XFAILS | {
     "InterpolateDynamicModule_sizes_nearest",
     "InterpolateStaticModule_scales_bilinear_align_corners",
     "InterpolateDynamicModule_scales_recompute_bilinear",
+    "Matmul3DVec_basic",
+    "MatmulVec3D_basic",
 }
 
 LINALG_CRASHING_SET = {
@@ -823,6 +825,9 @@ FX_IMPORTER_STABLEHLO_CRASHING_SET = {
 }
 
 STABLEHLO_PASS_SET = {
+    "Matmul3DMat_basic",
+    "Matmul3DVec_basic",
+    "MatmulVec3D_basic",
     "SplitWithSizes_Module_basic",
     "TensorSplitSections_GetItemModule_basic",
     "TensorSplitSections_ListUnpackModule_basic",
