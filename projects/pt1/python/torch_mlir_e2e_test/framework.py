@@ -305,10 +305,10 @@ def generate_golden_trace(test: Test) -> Trace:
     return trace
 
 
-def compile_and_run_test(test: Test, config: TestConfig, verbose=False) -> Any:
+def compile_and_run_test(test: Test, config: TestConfig, verbose=False, sequential=False) -> Any:
     try:
         golden_trace = generate_golden_trace(test)
-        if verbose:
+        if verbose or sequential:
             print(f"Compiling {test.unique_name}...", file=sys.stderr)
         compiled = config.compile(test.program_factory(), verbose=verbose)
     except Exception as e:
@@ -322,7 +322,7 @@ def compile_and_run_test(test: Test, config: TestConfig, verbose=False) -> Any:
             golden_trace=None,
         )
     try:
-        if verbose:
+        if verbose or sequential:
             print(f"Running {test.unique_name}...", file=sys.stderr)
         trace = config.run(compiled, golden_trace)
     except Exception as e:
@@ -375,7 +375,7 @@ def run_tests(
     # seems to cause a cascade of failures resulting in undecipherable error
     # messages.
     if num_processes == 1 or sequential:
-        return [compile_and_run_test(test, config, verbose) for test in tests]
+        return [compile_and_run_test(test, config, verbose, sequential) for test in tests]
 
     # This is needed because autograd does not support crossing process
     # boundaries.
